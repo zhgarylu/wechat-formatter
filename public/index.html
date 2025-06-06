@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>微信公众号 AI 排版工具</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #f8f9fa;
+            --border-color: #dee2e6;
+            --text-color: #333;
+            --bg-color: #fff;
+            --code-bg: #2d2d2d;
+            --code-color: #f8f8f2;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 20px;
+        }
+        h1 { color: var(--primary-color); }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            flex-grow: 1;
+        }
+        @media (max-width: 992px) {
+            .main-content { grid-template-columns: 1fr; }
+        }
+        .panel {
+            background-color: var(--bg-color);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .panel h2 {
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+            resize: vertical;
+        }
+        #content-input {
+            min-height: 300px;
+            flex-grow: 1;
+        }
+        #style-prompt-input {
+            min-height: 80px;
+        }
+        .action-bar {
+            text-align: center;
+            margin: 20px 0;
+        }
+        #generate-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #generate-btn:hover { background-color: #0056b3; }
+        #generate-btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .output-panel .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 15px;
+        }
+        .tab-button {
+            padding: 10px 15px;
+            cursor: pointer;
+            border: none;
+            background: none;
+            font-size: 16px;
+            border-bottom: 2px solid transparent;
+        }
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+        .output-content {
+            flex-grow: 1;
+            overflow: auto;
+            position: relative;
+        }
+        .output-view { display: none; }
+        .output-view.active { display: block; }
+        #preview-output {
+            padding: 15px;
+            border: 1px dashed var(--border-color);
+            /* 【【【 关键改动 1：移除背景色 】】】 */
+            /* background-color: var(--secondary-color); */ 
+            height: 500px;
+            overflow-y: auto;
+        }
+        #code-output-container {
+            background-color: var(--code-bg);
+            color: var(--code-color);
+            padding: 15px;
+            border-radius: 4px;
+            height: 500px;
+            overflow: auto;
+            position: relative;
+        }
+        #code-output {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: "Courier New", Courier, monospace;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,0.4); }
+        .copy-preview-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>微信公众号 AI 排版工具</h1>
+            <p>输入文章内容和风格提示词，AI 将生成兼容微信编辑器的精美排版。请在“预览”区复制排版结果。</p>
+        </header>
+
+        <div class="main-content">
+            <div class="panel input-panel">
+                <h2>输入区</h2>
+                <label for="content-input"><strong>文章内容</strong> (支持 Markdown 简单语法: #, ##, -, >)</label>
+                <textarea id="content-input" placeholder="在此处粘贴您的文章内容..."></textarea>
+                
+                <br>
+
+                <label for="style-prompt-input"><strong>排版风格提示词</strong></label>
+                <textarea id="style-prompt-input" placeholder="例如：科技蓝风格，简洁专业，代码块要高亮。或：温馨活泼的亲子阅读风格，多用圆角和暖色调。"></textarea>
+            </div>
+
+            <div class="panel output-panel">
+                <div class="tabs">
+                    <button id="tab-preview" class="tab-button active">预览</button>
+                    <button id="tab-code" class="tab-button">代码</button>
+                </div>
+                <div class="output-content">
+                    <div id="preview-view" class="output-view active">
+                        <button id="copy-preview-btn" class="copy-preview-btn" title="复制预览内容">复制预览</button>
+                        <div id="preview-output">请先生成内容...</div>
+                    </div>
+                    <div id="code-view" class="output-view">
+                        <div id="code-output-container">
+                             <button id="copy-code-btn" class="copy-btn" title="复制HTML代码">复制源码</button>
+                            <pre><code id="code-output">请先生成内容...</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="action-bar">
+            <button id="generate-btn">🚀 开始智能排版</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DOM Elements ---
+        const contentInput = document.getElementById('content-input');
+        const stylePromptInput = document.getElementById('style-prompt-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const previewOutput = document.getElementById('preview-output');
+        const codeOutput = document.getElementById('code-output');
+        const tabPreview = document.getElementById('tab-preview');
+        const tabCode = document.getElementById('tab-code');
+        const previewView = document.getElementById('preview-view');
+        const codeView = document.getElementById('code-view');
+        const copyPreviewBtn = document.getElementById('copy-preview-btn');
+        const copyCodeBtn = document.getElementById('copy-code-btn');
+
+        // --- System Prompt (保持不变) ---
+        const SYSTEM_PROMPT = `
+# 系统提示词：微信公众号文章排版专家
+
+## 【指令核心】
+
+您是一名具备微信公众号编辑器“内核级”理解能力和卓越可读性设计理念的排版专家。您的核心目标是根据用户提供的文章内容和详细排版要求（包括期望的“文章主题/风格”），生成一段经过极致优化、高度兼容微信公众号编辑器实际渲染能力的HTML/CSS代码。这段代码旨在通过用户在浏览器中渲染后复制粘贴的方式，确保所有关键样式都能在微信公众号中稳定且无损地生效，并根据主题呈现多样化的视觉风格，同时最大化文章的可读性。
+
+## 【对微信公众号编辑器“白名单”与“黑名单”的深刻认知】
+
+您已深入分析并掌握微信公众号编辑器在接收外部HTML/CSS内容后的“二次解析”和“极端过滤”机制。您生成的所有代码将严格遵守以下“白名单”和“黑名单”规则，以最大化排版成功率：
+
+*   唯一成功路径： 内容必须通过浏览器渲染后复制粘贴。直接粘贴原始代码会失败。
+*   样式优先级： 强制且大量使用内联样式 (\`style="..."\`)。这是确保样式稳定保留的最高效方式。避免或极少使用\`<style>\`标签内的嵌入式CSS。
+
+### 核心支持的HTML标签（已验证为安全稳定）：
+
+*   结构与内容： \`div\`, \`section\`, \`p\`, \`h1\`, \`h2\`, \`h3\`, \`h4\`, \`h5\`, \`h6\`。
+*   文本修饰： \`span\`, \`strong\` (\`<b>\`), \`em\` (\`<i>\`), \`del\`, \`code\`, \`pre\`。
+*   列表： \`ul\`, \`ol\`, \`li\`。
+*   引用： \`blockquote\`。
+*   链接与媒体： \`a\` (外部链接仅显示样式，不可点击跳转), \`img\`, \`figure\`, \`figcaption\`。
+*   表格： \`table\`, \`thead\`, \`tbody\`, \`tr\`, \`td\`, \`th\`。
+*   分隔符： \`hr\`。
+*   SVG： \`<svg>\`（作为内联图形元素，而非文档主体）。
+
+### 核心支持的CSS属性（请优先且大量使用这些属性，它们最稳定）：
+
+*   字体与文本：
+    *   \`font-size\` (px, em, %)
+    *   \`color\` (Hex, RGB, RGBA)
+    *   \`background-color\` (Hex, RGB, RGBA)
+    *   \`font-weight\` (\`bold\`或数字)
+    *   \`text-align\` (\`left\`, \`center\`, \`right\`, \`justify\`)
+    *   \`line-height\` (无单位倍数，如\`1.75\`)
+    *   \`letter-spacing\`
+    *   \`text-decoration\` (underline, line-through, none)
+    *   \`font-style\` (italic)
+*   盒模型与边框：
+    *   \`padding\` (所有方向)
+    *   \`margin\` (所有方向，包括\`auto\`用于居中，避免负值)
+    *   \`border\` (\`solid\`实线、\`dashed\`虚线，颜色，宽度)
+    *   \`border-bottom\`
+    *   \`border-left\`
+    *   \`border-radius\`
+*   布局与显示：
+    *   \`display: block\`
+    *   \`display: inline-block\`
+    *   \`display: table\` (用于H1/H2等标题的居中显示)
+*   尺寸与溢出：
+    *   \`width\`, \`height\`
+    *   \`max-width: 100%\` (用于图片、SVG自适应)
+    *   \`overflow-x: auto\` (用于代码块和表格的横向滚动)
+*   特殊属性：
+    *   \`transform: scale(1, 0.5)\`（仅限\`hr\`标签的瘦线效果，其他\`transform\`属性一律视为不兼容）。
+    *   \`word-break\`: \`keep-all\`（用于表格等，避免单词被截断）。
+    *   \`list-style\`: \`circle\`, \`disc\`, \`decimal\`等。
+
+### SVG内容嵌入支持的优化：
+
+*   微信编辑器能够直接渲染HTML中内联嵌入的\`<svg>\`标签内容。这使得复杂的图表（如LaTeX公式渲染图、Mermaid图、或其他自定义矢量图）可以作为静态图形直接放入文章，实现高质量展示。
+*   SVG元素样式： SVG内部的\`style\`属性（如\`fill\`, \`stroke\`, \`stroke-width\`, \`font-family\`, \`font-size\`, \`text-anchor\`等）及其图元元素（\`path\`, \`circle\`, \`rect\`, \`text\`, \`g\`等）通常能被保留。
+*   响应式显示： 在嵌入SVG时，请确保\`<svg>\`标签本身具有\`width: 100%; height: auto; display: block;\` 和 \`max-width: 100%;\` 等样式，配合\`viewBox\`属性以确保其在不同设备上的响应式显示。
+*   严格限制： 再次强调： SVG内部的任何动画效果（如CSS \`animation\` 或 SVG \`animate\` 标签）在微信公众号中均不会生效。SVG内容将以静态图像形式呈现。
+*   AI生成能力： 您作为AI，无法将用户的文本描述（例如“请绘制一个流程图”、“生成某个数学公式的图像”）直接转换为复杂的SVG代码。 用户若需嵌入特定的流程图、公式图等，需自行提供完整的SVG代码字符串，您负责将其正确嵌入到HTML结构中，并排版其周围的文本。
+
+### 严格“黑名单”属性（一律禁止使用）：
+
+*   所有JavaScript： (\`<script>\`标签，事件属性如\`onclick\`等)。
+*   所有外部资源链接： (\`<link>\`标签，\`background-image\`的外部URL，\`@font-face\`等)。
+*   复杂布局： \`float\`（除了最简单的文本环绕，复杂多列布局极不稳定）、\`position: absolute/fixed\`、\`flexbox\`、\`grid\`。
+*   高级动态与视觉效果： \`transition\`, \`animation\`, \`keyframes\`, \`box-shadow\` (复杂阴影), \`text-shadow\`, \`linear-gradient\`/\`radial-gradient\`等渐变。
+*   伪类/伪元素： \`:hover\`, \`:before\`, \`:after\`等。
+
+## 【排版设计原则：多样化风格与极致可读性优化】
+
+您将根据用户提供的文章主题/风格，灵活运用“白名单”内的CSS属性，实现多样化的视觉效果，并始终将可读性放在首位。
+
+### 可读性优化与字体层级设计：
+
+1.  字体大小层级（默认推荐，可根据主题微调）：
+    *   正文 (\`p\`)： 默认 \`16px\`。
+    *   强调内容 (\`strong\`, \`span\` with \`color\` / \`background-color\`)： 可在正文基础上稍作放大（如 \`17px\`）或加粗，或改变颜色。
+    *   H1 (主标题)： 24px - 26px，加粗，可居中。
+    *   H2 (大节标题)： 20px - 22px，加粗，可居中或左对齐带装饰。
+    *   H3 (小节标题)： 18px - 20px，加粗，左对齐带装饰。
+    *   H4 (子标题/推荐阅读标题)： 16px - 18px，加粗，通常左对齐，颜色可与正文区分。
+    *   小字/说明/图注 (\`figcaption\`)： 14px，颜色稍淡。
+    *   行内代码 (\`code\`)： 保持默认\`90%\`或\`14px\`，背景色与文字色区分。
+    *   代码块 (\`pre\`)： 保持默认\`90%\`或\`14px\`，并确保\`overflow-x: auto\`。
+2.  行高： 全局和元素默认使用 \`line-height: 1.75\` 或 \`1.8\`，确保文本行之间有足够的“呼吸空间”，提升阅读舒适度。
+3.  段落与元素间距： 合理设置\`margin\`和\`padding\`，确保段落、标题、图片、区块之间有清晰的视觉分隔，避免拥挤。
+4.  色彩对比： 确保文字颜色与背景颜色之间有足够高的对比度，保障在不同阅读环境下（如阳光下、夜间模式）的可见性。
+5.  字体家族： \`font-family\`使用系统默认字体栈，如：\`-apple-system-font,BlinkMacSystemFont, Helvetica Neue, PingFang SC, Hiragino Sans GB , Microsoft YaHei UI , Microsoft YaHei ,Arial,sans-serif\`。
+
+### 主题风格映射（灵活应用）：
+
+*   商务/专业主题：
+    *   色彩： 倾向于低饱和度、沉稳的颜色（蓝、灰、深绿，如\`#34495e\`, \`#666\`）。
+    *   间距： 规整的间距，行高适中（1.75）。
+    *   标题： 清晰的标题分隔（如底部实线\`border-bottom\`或左侧粗线\`border-left\`）。
+    *   区块： 引用块可使用浅灰色背景和蓝色左边框。
+*   科技/极客主题：
+    *   色彩： 可用略深色背景（如代码块背景）、高亮强调色（蓝、绿、紫，如\`#0F4C81\`, \`#2980b9\`），搭配浅色正文。
+    *   间距： 略紧凑的行高（1.7）和段落间距。
+    *   标题： 更鲜明的边框或背景色标题（如\`h2\`的背景色），或带小图标的标题。
+*   生活/情感主题：
+    *   色彩： 倾向于柔和、温暖的色彩（米色、浅粉、淡绿）。
+    *   间距： 更宽松的行高（1.8-2.0）和段落间距。
+    *   标题/区块： 圆角和柔和的边框，或不使用边框，仅通过颜色和间距区分。
+*   教育/教程主题：
+    *   色彩： 强调清晰度，对比度高的文字颜色，突出重点。
+    *   结构： 明确的标题层次，重点内容可使用背景色或边框突出，列表和代码块需整洁、易读。
+    *   间距： 适中偏大的行高和段落间距。
+*   其他主题： 根据用户具体描述，在上述原则下进行合理推断和设计，确保风格统一且可读。
+
+## 【期望的用户输入】
+
+用户会提供：
+
+1.  文章内容： 原始文本。用户可以使用简单标记来表示结构，例如：
+    *   \`# 大标题\`
+    *   \`## 小标题\`
+    *   \`- 列表项\`
+    *   \`> 引用内容\`
+    *   \`--- 分隔线\`
+    *   \`[图片描述]\` 或 \`[视频描述]\` （表示媒体文件插入点）
+    *   \`[请在此处提供完整的SVG代码，例如：<svg ...>...</svg>]\` （如果用户需要嵌入复杂图表，他们需要提供完整的SVG代码字符串，您负责将其嵌入并排版其周围文本）。
+2.  详细的排版要求： 越具体越好。请务必包含对文章主题或期望风格的描述（例如：“科技感”、“温馨”、“专业”、“活泼”等）。此外，如果对特定元素的字号、颜色、间距或装饰有特殊偏好，也可以明确说明。您将根据这些要求，在“极致兼容性原则”、“多样化风格映射”和“可读性优化”的指导下进行排版设计。对于任何可能无法实现或兼容性差的要求，您将默认选择最接近且最稳定的替代方案，无需额外询问。
+
+## 【您的输出规范】
+
+*   仅输出HTML/CSS代码。 代码应是一个完整的HTML片段，可以作为\`body\`标签内的内容。
+*   所有样式必须以内联方式呈现。
+*   代码应尽可能简洁、无冗余。
+*   不包含任何解释性文字或使用说明。
+*   不要改变用户给你的文章内容，保持文章原本内容进行排版
+`;
+        
+        // --- Event Listeners ---
+        generateBtn.addEventListener('click', handleGenerate);
+        tabPreview.addEventListener('click', () => switchTab('preview'));
+        tabCode.addEventListener('click', () => switchTab('code'));
+        copyPreviewBtn.addEventListener('click', copyPreview);
+        copyCodeBtn.addEventListener('click', copyCode);
+        
+        // --- Core Functions ---
+        function switchTab(tabName) {
+            if (tabName === 'preview') {
+                tabPreview.classList.add('active');
+                tabCode.classList.remove('active');
+                previewView.classList.add('active');
+                codeView.classList.remove('active');
+            } else {
+                tabPreview.classList.remove('active');
+                tabCode.classList.add('active');
+                previewView.classList.remove('active');
+                codeView.classList.add('active');
+            }
+        }
+
+        async function handleGenerate() {
+            const content = contentInput.value.trim();
+            const stylePrompt = stylePromptInput.value.trim();
+
+            if (!content || !stylePrompt) {
+                alert('请填写文章内容和排版风格提示词！');
+                return;
+            }
+
+            const userPrompt = `【文章内容】\n${content}\n\n【排版要求】\n${stylePrompt}`;
+            
+            generateBtn.disabled = true;
+            generateBtn.textContent = '排版中，请稍候...';
+            previewOutput.innerHTML = 'AI 正在努力创作中...';
+            codeOutput.textContent = 'AI 正在努力创作中...';
+
+            try {
+                // 调用我们的后端 API
+                const htmlResult = await callAIAPI(SYSTEM_PROMPT, userPrompt);
+                
+                previewOutput.innerHTML = htmlResult;
+                codeOutput.textContent = htmlResult;
+
+            } catch (error) {
+                console.error('生成失败:', error);
+                const errorMessage = `生成失败: ${error.message}. 请检查浏览器控制台和后端日志。`;
+                previewOutput.innerHTML = `<p style="color: red;">${errorMessage}</p>`;
+                codeOutput.textContent = errorMessage;
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = '🚀 开始智能排版';
+            }
+        }
+
+        async function callAIAPI(systemPrompt, userPrompt) {
+            const API_ENDPOINT = '/api/generate-wechat-html';
+
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    system_prompt: systemPrompt,
+                    user_prompt: userPrompt
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: '未知的服务器错误' }));
+                throw new Error(`服务器错误 (状态码: ${response.status}): ${errorData.error}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                return data.html_output;
+            } else {
+                throw new Error(data.error || '后端返回了错误，但未提供具体信息');
+            }
+        }
+        
+        // 【【【 关键改动 2：改进复制功能 】】】
+        function copyPreview() {
+            // 检查预览区是否有子元素（即AI是否已生成内容）
+            const contentToCopy = previewOutput.firstElementChild;
+
+            if (!contentToCopy) {
+                alert('没有可复制的内容！请先生成排版。');
+                return;
+            }
+
+            try {
+                // 创建一个 Range 对象，只选中 AI 生成的第一个子元素
+                const range = document.createRange();
+                range.selectNode(contentToCopy); // 使用 selectNode 而不是 selectNodeContents
+                
+                const selection = window.getSelection();
+                selection.removeAllRanges();
+                selection.addRange(range);
+                
+                document.execCommand('copy');
+                
+                // 复制后清除选择，避免页面上还留着蓝色选中状态
+                selection.removeAllRanges();
+                
+                alert('预览内容已复制！请直接粘贴到微信公众号编辑器中。');
+            } catch(e) {
+                console.error("复制预览失败: ", e);
+                alert("复制失败，您的浏览器可能不支持此操作。");
+            }
+        }
+        
+        function copyCode() {
+            navigator.clipboard.writeText(codeOutput.textContent).then(() => {
+                alert('HTML源代码已复制！');
+            }, (err) => {
+                console.error('复制源码失败: ', err);
+                alert('复制失败！');
+            });
+        }
+
+        // --- Initial setup ---
+        contentInput.value = `# 这是我的文章标题\n\n大家好，这是正文的第一段。我想在这里强调一些**重要内容**。\n\n## 这是一个二级标题\n\n接下来是一个列表：\n- 列表项一\n- 列表项二\n- 列表项三\n\n> 这是一个引用的区块，希望能突出显示。\n\n下面是一个代码块：\n\`\`\`javascript\nfunction helloWorld() {\n  console.log("Hello, WeChat Formatter!");\n}\n\`\`\``;
+        stylePromptInput.value = `我想要一个干净、专业的科技博客风格。\n- 主色调使用蓝色（例如 #3A5FCD）。\n- 标题要有左边框装饰。\n- 引用区块使用浅灰色背景。\n- 代码块使用深色背景，并有语法高亮。\n- 全文行高舒适，段落间距清晰。`;
+
+    </script>
+</body>
+</html>
