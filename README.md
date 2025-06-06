@@ -8,6 +8,9 @@
 
 ![image](https://github.com/user-attachments/assets/038abd26-837d-4fe3-9a1c-f581ccb58eb1)
 
+复制到公众号的预览效果：
+![image](https://github.com/user-attachments/assets/0eb70dc2-3bd5-48c8-ae9a-d214581aedab)
+
 
 ---
 
