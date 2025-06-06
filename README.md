@@ -30,8 +30,8 @@
 
 *   **方式 A (推荐): 使用 Git 克隆**
     ```bash
-    git clone https://github.com/YourUsername/wechat-ai-formatter.git
-    cd wechat-ai-formatter
+    git clone https://github.com/zhgarylu/wechat-formatter.git
+    cd wechat-formatter
     ```
 
 *   **方式 B: 下载 ZIP 压缩包**
